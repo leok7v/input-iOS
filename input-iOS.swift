@@ -1,9 +1,22 @@
 import SwiftUI
 import GameController
 
-@main
-struct app: App {
-    var body: some Scene { WindowGroup { ContentView() } }
+@main struct app: App {
+    @Environment(\EnvironmentValues.scenePhase) private var scenePhase
+
+    var body: some Scene {
+        WindowGroup { ContentView() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                }
+            }
+    }
+}
+
+func endEditing() {
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                    to: nil, from: nil, for: nil)
 }
 
 func isKeyboardConnected() -> Bool {
@@ -11,12 +24,11 @@ func isKeyboardConnected() -> Bool {
 }
 
 struct MultilineTextView: UIViewRepresentable {
-    
     @Binding var text: String
     let placeholder: String
     let maxHeight: CGFloat
     let minHeight: CGFloat
-    
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> UITextView {
@@ -24,11 +36,13 @@ struct MultilineTextView: UIViewRepresentable {
         tv.font = .systemFont(ofSize: 17)
         tv.delegate = context.coordinator
         tv.isScrollEnabled = false
+        tv.textContainerInset = UIEdgeInsets(top: 8, left: 5, bottom: 8, right: 5)
         tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
         tv.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-        addAccessory(context, tv)
+        if UIDevice.current.userInterfaceIdiom != .pad || isKeyboardConnected() {
+            addAccessory(context, tv)
+        }
         addPlaceholder(tv)
-        DispatchQueue.main.async { tv.becomeFirstResponder() }
         return tv
     }
 
@@ -56,13 +70,13 @@ struct MultilineTextView: UIViewRepresentable {
         label.text = placeholder
         label.font = tv.font
         label.textColor = .placeholderText
-        label.numberOfLines = 0
+        label.numberOfLines = 1
         label.translatesAutoresizingMaskIntoConstraints = false
         tv.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: tv.leadingAnchor, constant: 5),
+            label.leadingAnchor.constraint(equalTo: tv.leadingAnchor, constant: 10),
             label.topAnchor.constraint(equalTo: tv.topAnchor, constant: 8),
-            label.widthAnchor.constraint(equalTo: tv.widthAnchor, constant: -10)
+            label.trailingAnchor.constraint(equalTo: tv.trailingAnchor, constant: -10)
         ])
         label.isHidden = !text.isEmpty
     }
@@ -72,36 +86,24 @@ struct MultilineTextView: UIViewRepresentable {
         let accessory = UIView()
         accessory.backgroundColor = .systemGray6
         accessory.translatesAutoresizingMaskIntoConstraints = false
-        let height = isKeyboardConnected() ? 70.0 : 44.0
-        accessory.heightAnchor.constraint(equalToConstant: height).isActive = true
+        accessory.heightAnchor.constraint(equalToConstant: 44).isActive = true
         let done = UIButton(type: .system)
         done.setImage(UIImage(systemName: "keyboard.chevron.compact.down"), for: .normal)
         done.addTarget(context.coordinator, action: #selector(Coordinator.dismissKeyboard), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
         accessory.addSubview(done)
         NSLayoutConstraint.activate([
-            done.trailingAnchor.constraint(equalTo: accessory.trailingAnchor, constant: -30),
-            done.centerYAnchor.constraint(equalTo: accessory.centerYAnchor),
-            done.widthAnchor.constraint(equalToConstant: 30),
-            done.heightAnchor.constraint(equalToConstant: 30)
+            done.trailingAnchor.constraint(equalTo: accessory.trailingAnchor, constant: -16),
+            done.centerYAnchor.constraint(equalTo: accessory.centerYAnchor)
         ])
         tv.inputAccessoryView = accessory
     }
-        
+
     class Coordinator: NSObject, UITextViewDelegate {
-        
         var parent: MultilineTextView
-        weak var textView: UITextView?
-        
+
         init(_ parent: MultilineTextView) {
             self.parent = parent
-            super.init()
-            NotificationCenter.default.addObserver(self,
-                selector: #selector(keyboardWillShow),
-                name: UIResponder.keyboardWillShowNotification, object: nil)
-            NotificationCenter.default.addObserver(self,
-                selector: #selector(keyboardWillHide),
-                name: UIResponder.keyboardWillHideNotification, object: nil)
         }
 
         func textViewDidChange(_ tv: UITextView) {
@@ -117,21 +119,12 @@ struct MultilineTextView: UIViewRepresentable {
                 #selector(UIResponder.resignFirstResponder),
                 to: nil, from: nil, for: nil)
         }
-        
-        @objc func keyboardWillShow(notification: Notification) {
-            print("isKeyboardConnected \(isKeyboardConnected())")
-        }
-
-        @objc func keyboardWillHide(notification: Notification) {
-            print("isKeyboardConnected \(isKeyboardConnected())")
-        }
-
     }
 }
 
 struct ContentView: View {
-    
     @State private var input = ""
+
     static let lineHeight: CGFloat = 17
     static let minHeight: CGFloat = lineHeight * 2
 
@@ -143,7 +136,7 @@ struct ContentView: View {
             List(1...33, id: \.self) { Text("Paragraph \($0)") }
                 .listStyle(.plain)
         }
-        .safeAreaInset(edge: .bottom, alignment: .leading, spacing: 0) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             MultilineTextView(
                 text: $input,
                 placeholder: "Ask Anything...",
@@ -155,6 +148,8 @@ struct ContentView: View {
             .padding()
             .background(Color(uiColor: .systemBackground))
         }
+        .contentShape(Rectangle())
+        .onTapGesture { endEditing() }
     }
 }
 

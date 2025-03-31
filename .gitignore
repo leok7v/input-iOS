@@ -1,5 +1,6 @@
 .DS_Store
 **/.DS_Store
+input-iOS.xcodeproj/xcuserdata/**
 input-iOS.xcodeproj/project.xcworkspace/xcuserdata/**
 DerivedData
 
