@@ -1,16 +1,22 @@
 import SwiftUI
+import GameController
 
 @main
 struct app: App {
     var body: some Scene { WindowGroup { ContentView() } }
 }
 
+func isKeyboardConnected() -> Bool {
+    return GCKeyboard.coalesced != nil
+}
+
 struct MultilineTextView: UIViewRepresentable {
+    
     @Binding var text: String
     let placeholder: String
     let maxHeight: CGFloat
     let minHeight: CGFloat
-
+    
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> UITextView {
@@ -62,37 +68,41 @@ struct MultilineTextView: UIViewRepresentable {
     }
 
     func addAccessory(_ context: Context, _ tv: UITextView) {
-        // Create the accessory view
+        if tv.inputAccessoryView != nil { return }
         let accessory = UIView()
         accessory.backgroundColor = .systemGray6
-        accessory.translatesAutoresizingMaskIntoConstraints = false // Use manual constraints
-
-        // Define a fixed height for the accessory view
-        accessory.heightAnchor.constraint(equalToConstant: 44).isActive = true
-
-        // Create the "Done" button
+        accessory.translatesAutoresizingMaskIntoConstraints = false
+        let height = isKeyboardConnected() ? 70.0 : 44.0
+        accessory.heightAnchor.constraint(equalToConstant: height).isActive = true
         let done = UIButton(type: .system)
         done.setImage(UIImage(systemName: "keyboard.chevron.compact.down"), for: .normal)
         done.addTarget(context.coordinator, action: #selector(Coordinator.dismissKeyboard), for: .touchUpInside)
         done.translatesAutoresizingMaskIntoConstraints = false
         accessory.addSubview(done)
-
-        // Define the button's layout within the accessory view
         NSLayoutConstraint.activate([
-            done.trailingAnchor.constraint(equalTo: accessory.trailingAnchor, constant: -16),
+            done.trailingAnchor.constraint(equalTo: accessory.trailingAnchor, constant: -30),
             done.centerYAnchor.constraint(equalTo: accessory.centerYAnchor),
-            done.widthAnchor.constraint(equalToConstant: 30), // Optional: Ensure a specific width
-            done.heightAnchor.constraint(equalToConstant: 30) // Optional: Ensure a specific height
+            done.widthAnchor.constraint(equalToConstant: 30),
+            done.heightAnchor.constraint(equalToConstant: 30)
         ])
-
-        // Assign the accessory view to the text view
         tv.inputAccessoryView = accessory
     }
-    
+        
     class Coordinator: NSObject, UITextViewDelegate {
+        
         var parent: MultilineTextView
-
-        init(_ parent: MultilineTextView) { self.parent = parent }
+        weak var textView: UITextView?
+        
+        init(_ parent: MultilineTextView) {
+            self.parent = parent
+            super.init()
+            NotificationCenter.default.addObserver(self,
+                selector: #selector(keyboardWillShow),
+                name: UIResponder.keyboardWillShowNotification, object: nil)
+            NotificationCenter.default.addObserver(self,
+                selector: #selector(keyboardWillHide),
+                name: UIResponder.keyboardWillHideNotification, object: nil)
+        }
 
         func textViewDidChange(_ tv: UITextView) {
             parent.text = tv.text
@@ -103,12 +113,24 @@ struct MultilineTextView: UIViewRepresentable {
         }
 
         @objc func dismissKeyboard() {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil)
         }
+        
+        @objc func keyboardWillShow(notification: Notification) {
+            print("isKeyboardConnected \(isKeyboardConnected())")
+        }
+
+        @objc func keyboardWillHide(notification: Notification) {
+            print("isKeyboardConnected \(isKeyboardConnected())")
+        }
+
     }
 }
 
 struct ContentView: View {
+    
     @State private var input = ""
     static let lineHeight: CGFloat = 17
     static let minHeight: CGFloat = lineHeight * 2
